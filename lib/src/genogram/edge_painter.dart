@@ -168,36 +168,44 @@ class GenogramEdgePainter<E> extends CustomPainter {
 
   /// Draw connections between parents and children
   void _drawParentChildConnections(Canvas canvas, List<Node<E>> nodes) {
+    String makeMarriageKey(String id1, String id2) {
+      // luôn sắp xếp để key đồng nhất
+      final sorted = [id1, id2]..sort();
+      return '${sorted[0]}|${sorted[1]}';
+    }
+
     for (final Node<E> child in nodes) {
       // Get parent IDs
-      final List<String>? fatherIds = controller.fatherProvider(child.data);
-      final List<String>? motherIds = controller.motherProvider(child.data);
+      final List<String> fatherIds =
+          controller.fatherProvider(child.data) ?? [];
+      final List<String> motherIds =
+          controller.motherProvider(child.data) ?? [];
 
       // Skip if no parent info
-      if (fatherIds == null && motherIds == null) continue;
+      if (fatherIds.isEmpty && motherIds.isEmpty) continue;
 
       // Find parent nodes
-      List<Node<E>>? fathers, mothers;
+      List<Node<E>> fathers = [], mothers = [];
 
-      if (fatherIds != null) {
+      if (fatherIds.isNotEmpty) {
         try {
           fathers = nodes
               .where((node) =>
                   fatherIds.contains(controller.idProvider(node.data)))
               .toList();
         } catch (_) {
-          fathers = null;
+          fathers = [];
         }
       }
 
-      if (motherIds != null) {
+      if (motherIds.isNotEmpty) {
         try {
           mothers = nodes
               .where((node) =>
                   motherIds.contains(controller.idProvider(node.data)))
               .toList();
         } catch (_) {
-          mothers = null;
+          mothers = [];
         }
       }
 
@@ -207,56 +215,60 @@ class GenogramEdgePainter<E> extends CustomPainter {
       final bool isMarriedFemale = controller.isFemale(child.data) &&
           controller.getSpouseList(child.data).isNotEmpty;
 
+      print(childConn);
+
+      // track những parent đã được nối qua marriage
+      final Set<String> usedParents = {};
+
       // Different cases of parent-child connections
-      if ((fathers ?? []).isNotEmpty && (mothers ?? []).isNotEmpty) {
-        bool hasMarriageConnection = false;
-        for (final father in (fathers ?? [])) {
-          for (final mother in (mothers ?? [])) {
-            // Both parents present - try to find their marriage connection
-            final String marriageKey =
-                '${controller.idProvider(father.data)}|${controller.idProvider(mother.data)}';
+      if (fathers.isNotEmpty && mothers.isNotEmpty) {
+        for (final father in fathers) {
+          for (final mother in mothers) {
+            final marriageKey = makeMarriageKey(
+              controller.idProvider(father.data),
+              controller.idProvider(mother.data),
+            );
 
             if (_marriagePoints.containsKey(marriageKey)) {
-              hasMarriageConnection = true;
-              // Draw from marriage point to child
-              final Offset marriagePoint = _marriagePoints[marriageKey]!;
-              final Color marriageColor =
-                  _marriageColors[marriageKey] ?? Colors.grey;
+              usedParents.add(controller.idProvider(father.data));
+              usedParents.add(controller.idProvider(mother.data));
 
-              // Create parent-child paint from the configuration
-              final Paint connectionPaint = Paint()
+              final marriagePoint = _marriagePoints[marriageKey]!;
+              final marriageColor = _marriageColors[marriageKey] ?? Colors.grey;
+
+              final connectionPaint = Paint()
                 ..color = marriageColor
                 ..strokeWidth = config.childStrokeWidth
                 ..style = PaintingStyle.stroke;
 
-              // Use two-segment connection for married females, genogramParentChild for others
               final connectionType = isMarriedFemale
                   ? ConnectionType.twoSegment
                   : ConnectionType.genogramParentChild;
 
-              utils.drawConnection(canvas, marriagePoint, childConn,
-                  controller.boxSize, controller.orientation,
-                  type: connectionType, paint: connectionPaint);
+              utils.drawConnection(
+                canvas,
+                marriagePoint,
+                childConn,
+                controller.boxSize,
+                controller.orientation,
+                type: connectionType,
+                paint: connectionPaint,
+              );
             }
           }
         }
+      }
 
-        if (!hasMarriageConnection) {
-          // Nếu không có marriage connection nào khớp => vẽ từng cha/mẹ riêng lẻ
-          for (final father in (fathers ?? [])) {
-            _drawSingleParentConnection(canvas, father, child, isMarriedFemale);
-          }
-          for (final mother in (mothers ?? [])) {
-            _drawSingleParentConnection(canvas, mother, child, isMarriedFemale);
-          }
-        }
-      } else if ((fathers ?? []).isNotEmpty) {
-        for (final father in (fathers ?? [])) {
+      // Nối những cha không nằm trong marriage nào
+      for (final father in fathers) {
+        if (!usedParents.contains(controller.idProvider(father.data))) {
           _drawSingleParentConnection(canvas, father, child, isMarriedFemale);
         }
-      } else if ((mothers ?? []).isNotEmpty) {
-        for (final mother in (mothers ?? [])) {
-          // Mother only
+      }
+
+      // Nối những mẹ không nằm trong marriage nào
+      for (final mother in mothers) {
+        if (!usedParents.contains(controller.idProvider(mother.data))) {
           _drawSingleParentConnection(canvas, mother, child, isMarriedFemale);
         }
       }

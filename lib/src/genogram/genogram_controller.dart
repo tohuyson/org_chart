@@ -28,6 +28,8 @@ class GenogramController<E> extends BaseGraphController<E> {
   /// Returns an empty list if the item has no spouses
   List<String>? Function(E data) spousesProvider;
 
+  int? Function(E data) levelProvider;
+
   /// Function to determine the gender of an item
   /// - 0 represents male
   /// - 1 represents female
@@ -63,6 +65,7 @@ class GenogramController<E> extends BaseGraphController<E> {
     required this.motherProvider,
     required this.spousesProvider,
     required this.genderProvider,
+    required this.levelProvider,
   }) {
     // Calculate initial positions after construction
     calculatePosition();
@@ -111,10 +114,9 @@ class GenogramController<E> extends BaseGraphController<E> {
   /// These nodes will be placed at the top/left depending on orientation.
   @override
   List<Node<E>> get roots => nodes.where((node) {
-        final fathers = fatherProvider(node.data);
-        final mothers = motherProvider(node.data);
-        return (fathers == null || fathers.isEmpty) &&
-            (mothers == null || mothers.isEmpty);
+        final fathers = fatherProvider(node.data) ?? [];
+        final mothers = motherProvider(node.data) ?? [];
+        return fathers.isEmpty && mothers.isEmpty;
       }).toList();
 
   /// Convenience method to check if a data item represents a male
@@ -388,7 +390,7 @@ class GenogramController<E> extends BaseGraphController<E> {
 
         childrenTotalSize += subtreeSize;
         if (i < children.length - 1) {
-          childPos += subtreeSize + spacing; // spacing chuẩn
+          childPos += subtreeSize + spacing * 2; // spacing chuẩn
         }
       }
 
@@ -424,34 +426,133 @@ class GenogramController<E> extends BaseGraphController<E> {
 
     // Prioritize processing male nodes first among roots
     List<Node<E>> sortedRoots = [...roots];
-    sortedRoots.sort((a, b) {
-      // Males come first
-      if (isMale(a.data) && !isMale(b.data)) return -1;
-      if (!isMale(a.data) && isMale(b.data)) return 1;
+    // sortedRoots.sort((a, b) {
+    //   // Males come first
+    //   if (isMale(a.data) && !isMale(b.data)) return -1;
+    //   if (!isMale(a.data) && isMale(b.data)) return 1;
 
-      // Otherwise sort by ID for consistency
-      return idProvider(a.data).compareTo(idProvider(b.data));
-    });
+    //   // Otherwise sort by ID for consistency
+    //   return idProvider(a.data).compareTo(idProvider(b.data));
+    // });
 
     // Process each root node (individuals with no parents)
     double currentPos = minPos; // Start with minimum position value
 
     for (final root in sortedRoots) {
-      if (laidOut.contains(root)) continue; // Skip if already positioned
+      if (laidOut.contains(root)) {
+        continue; // Skip if already positioned
+      }
+
+      int level = levelProvider(root.data) ?? 0;
+
+      double y = 0;
+      if (orientation == GraphOrientation.topToBottom) {
+        final node = laidOut.where((node) => levelProvider(node.data) == level);
+        if (node.isNotEmpty) {
+          y = node.first.position.dy;
+        }
+      }
 
       // Layout this root's entire family tree and get its size
       final double subtreeSize = orientation == GraphOrientation.topToBottom
-          ? layoutFamily(root, currentPos, 0, 0)
+          ? layoutFamily(root, currentPos, y, level)
+          // layoutFamily(root, currentPos, 0, 0)
           : layoutFamily(root, 0, currentPos, 0);
 
       // Move to the position for the next root, adding extra spacing
       currentPos += subtreeSize + spacing * 3;
     }
 
+    // beautifyLayout(laidOut, boxSize, spacing);
+
     setState?.call(() {});
     // Center the graph if requested
     if (center) {
       centerGraph?.call();
+    }
+  }
+
+  void beautifyLayout(
+    Set<Node<E>> laidOut,
+    Size boxSize,
+    double spacing,
+  ) {
+    // Gom node theo level
+    final Map<int?, List<Node<E>>> nodesByLevel = {};
+    for (final node in laidOut) {
+      final level = levelProvider(node.data);
+      nodesByLevel.putIfAbsent(level, () => []).add(node);
+    }
+
+    for (final entry in nodesByLevel.entries) {
+      final level = entry.key ?? 0;
+      final nodes = entry.value;
+      if (nodes.isEmpty) continue;
+
+      // Sort node trong cùng level cho ổn định
+      nodes.sort((a, b) => a.position.dx.compareTo(b.position.dx));
+
+      int countSpouse = 0;
+
+      // Xử lý từng cụm siblings theo parent
+      for (final child in nodes) {
+        final parents = getParents(child);
+        if (parents.isEmpty) continue;
+
+        // Lấy center X của cụm cha/mẹ
+        final parentCenterX = parents
+                .map((p) => p.position.dx + boxSize.width / 2)
+                .fold(0.0, (a, b) => a + b) /
+            parents.length;
+
+        // Lấy tất cả siblings có cùng parents
+        final siblings = getChildren(parents);
+        if (siblings.isEmpty) continue;
+
+        siblings.sort((a, b) => a.position.dx.compareTo(b.position.dx));
+
+        // Nếu có coupleGroup → giữ vợ/chồng cạnh nhau
+        for (final sib in siblings) {
+          final spouses = getSpouseList(sib.data);
+          countSpouse += spouses.length;
+          if (spouses.isNotEmpty) {
+            // Đảm bảo spouse luôn ngay cạnh node chính
+            for (final spouse in spouses) {
+              spouse.position = Offset(
+                sib.position.dx + boxSize.width + spacing,
+                sib.position.dy,
+              );
+            }
+          }
+        }
+
+        print('Center Parent: $parentCenterX');
+
+        // Tính tổng width của group siblings
+        final totalWidth = siblings.length * boxSize.width +
+            (siblings.length - 1) * spacing +
+            countSpouse * boxSize.width;
+
+        print('totalWidth: $totalWidth');
+
+        // Tính điểm bắt đầu để căn giữa so với cha/mẹ
+        double startX = parentCenterX - totalWidth / 2;
+
+        double currentX = startX;
+
+        for (final sib in siblings) {
+          // Đặt sibling chính
+          sib.position = Offset(currentX, sib.position.dy);
+          currentX += boxSize.width + spacing;
+
+          // Lấy spouses của sibling và đặt ngay sau
+          final spouses = getSpouseList(sib.data);
+          for (final spouse in spouses) {
+            spouse.position = Offset(currentX, sib.position.dy);
+            currentX += boxSize.width + spacing;
+          }
+        }
+      }
     }
   }
 
