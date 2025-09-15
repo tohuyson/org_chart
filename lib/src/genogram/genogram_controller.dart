@@ -18,11 +18,11 @@ import 'package:org_chart/src/genogram/genogram_constants.dart';
 class GenogramController<E> extends BaseGraphController<E> {
   /// Function to extract the father's ID from an item
   /// Returns null if the item has no father (root node)
-  String? Function(E data) fatherProvider;
+  List<String>? Function(E data) fatherProvider;
 
   /// Function to extract the mother's ID from an item
   /// Returns null if the item has no mother (root node)
-  String? Function(E data) motherProvider;
+  List<String>? Function(E data) motherProvider;
 
   /// Function to extract a list of spouse IDs from an item
   /// Returns an empty list if the item has no spouses
@@ -110,11 +110,12 @@ class GenogramController<E> extends BaseGraphController<E> {
   /// representing the oldest generation in the genogram.
   /// These nodes will be placed at the top/left depending on orientation.
   @override
-  List<Node<E>> get roots => nodes
-      .where((node) =>
-          fatherProvider(node.data) == null &&
-          motherProvider(node.data) == null)
-      .toList();
+  List<Node<E>> get roots => nodes.where((node) {
+        final fathers = fatherProvider(node.data);
+        final mothers = motherProvider(node.data);
+        return (fathers == null || fathers.isEmpty) &&
+            (mothers == null || mothers.isEmpty);
+      }).toList();
 
   /// Convenience method to check if a data item represents a male
   /// Returns true if the gender code is 0
@@ -136,12 +137,15 @@ class GenogramController<E> extends BaseGraphController<E> {
     final nodeIds = nodes.map((e) => idProvider(e.data));
 
     // Return all nodes whose father or mother ID matches any parent ID
-    return this
-        .nodes
-        .where((element) =>
-            nodeIds.contains(fatherProvider(element.data)) ||
-            nodeIds.contains(motherProvider(element.data)))
-        .toList();
+    return this.nodes.where((element) {
+      final fatherIds = fatherProvider(element.data) ?? [];
+      final motherIds = motherProvider(element.data) ?? [];
+
+      final hasFather = fatherIds.any((id) => nodeIds.contains(id));
+      final hasMother = motherIds.any((id) => nodeIds.contains(id));
+
+      return hasFather || hasMother;
+    }).toList();
   }
 
   /// Retrieves the parent nodes for a given child node
@@ -160,15 +164,14 @@ class GenogramController<E> extends BaseGraphController<E> {
     }
 
     // Extract the father and mother IDs from the child data
-    final fatherId = fatherProvider(node.data);
-    final motherId = motherProvider(node.data);
+    final fatherIds = fatherProvider(node.data) ?? [];
+    final motherIds = motherProvider(node.data) ?? [];
 
     // Find nodes that match either father or mother ID
-    final result = nodes
-        .where((element) =>
-            idProvider(element.data) == fatherId ||
-            idProvider(element.data) == motherId)
-        .toList();
+    final result = nodes.where((element) {
+      final id = idProvider(element.data);
+      return fatherIds.contains(id) || motherIds.contains(id);
+    }).toList();
 
     // Cache the result for future calls
     _parentsCache[nodeId] = result;
@@ -257,11 +260,16 @@ class GenogramController<E> extends BaseGraphController<E> {
       final parentIds = parents.map((p) => idProvider(p.data)).toSet();
 
       // Return all nodes whose father or mother ID is in the parent set
-      return nodes
-          .where((child) =>
-              parentIds.contains(fatherProvider(child.data)) ||
-              parentIds.contains(motherProvider(child.data)))
-          .toList();
+      return nodes.where((child) {
+        final fatherIds = fatherProvider(child.data) ?? [];
+        final motherIds = motherProvider(child.data) ?? [];
+
+        // Kiểm tra giao giữa fatherIds/motherIds và parentIds
+        final hasFatherInGroup = fatherIds.any((id) => parentIds.contains(id));
+        final hasMotherInGroup = motherIds.any((id) => parentIds.contains(id));
+
+        return hasFatherInGroup || hasMotherInGroup;
+      }).toList();
     }
 
     /// Recursive function to layout a family subtree
@@ -281,57 +289,37 @@ class GenogramController<E> extends BaseGraphController<E> {
         y = max(y, minPos);
       }
 
-      // Skip if this node has already been positioned
+      // Skip nếu node đã layout
       if (laidOut.contains(node)) {
-        return 0; // No additional space required
+        return 0;
       }
 
-      // Check if we need to adjust position to avoid overlapping with existing nodes
+      // Check overlap trên cùng level
       if (levelEdges.containsKey(level)) {
         if (orientation == GraphOrientation.topToBottom) {
-          // Ensure we start after the rightmost node at this level plus spacing
           x = max(x, levelEdges[level]! + spacing);
         } else {
-          // For leftToRight, ensure we start after the bottommost node plus spacing
           y = max(y, levelEdges[level]! + spacing);
         }
-      } else {
-        levelEdges[level] = orientation == GraphOrientation.topToBottom ? x : y;
       }
 
-      // Build the couple group (a husband and his wife/wives, or just a single individual)
+      // Xây group (husband + wives hoặc female đơn lẻ)
       final List<Node<E>> coupleGroup = <Node<E>>[];
-
-      // Handle male nodes - include the man and all his spouses in the group
       if (isMale(node.data)) {
-        // Add the male node first
         coupleGroup.add(node);
         laidOut.add(node);
 
-        // Get all spouses, regardless of whether they've been positioned
-        final List<Node<E>> spouses = getSpouseList(node.data);
-
-        // For any spouse that has been positioned already, remove from laidOut
-        // so they can be repositioned with this husband
+        final spouses = getSpouseList(node.data);
         for (final spouse in spouses) {
-          laidOut.remove(spouse);
+          laidOut.remove(spouse); // reset nếu đã layout
         }
-
-        // Add all wives to the right/below of the husband depending on orientation
         coupleGroup.addAll(spouses);
         laidOut.addAll(spouses);
-      }
-      // Handle female nodes - if processing a female directly, she forms her own group
-      else {
-        // Check if this woman is a spouse of a male we'll process later
-        // If so, skip her as she'll be positioned with her husband
+      } else {
         final bool willBeSpouseOfLaterMale = nodes
-            .where((n) => !laidOut.contains(n))
-            .where((n) => isMale(n.data))
-            .any((n) {
-          final spouseIds = spousesProvider(n.data) ?? [];
-          return spouseIds.contains(idProvider(node.data));
-        });
+            .where((n) => !laidOut.contains(n) && isMale(n.data))
+            .any((n) => (spousesProvider(n.data) ?? [])
+                .contains(idProvider(node.data)));
 
         if (!willBeSpouseOfLaterMale) {
           coupleGroup.add(node);
@@ -339,12 +327,9 @@ class GenogramController<E> extends BaseGraphController<E> {
         }
       }
 
-      // If no nodes in couple group (might happen if we skip a female spouse), return 0
-      if (coupleGroup.isEmpty) {
-        return 0;
-      }
+      if (coupleGroup.isEmpty) return 0;
 
-      // Calculate the total width or height needed for this couple group
+      // Kích thước group
       final int groupCount = coupleGroup.length;
       final double groupSize = groupCount *
               (orientation == GraphOrientation.topToBottom
@@ -352,7 +337,7 @@ class GenogramController<E> extends BaseGraphController<E> {
                   : boxSize.height) +
           (groupCount - 1) * spacing;
 
-      // Position each person in the couple group in a row or column depending on orientation
+      // Đặt vị trí từng người
       for (int i = 0; i < groupCount; i++) {
         final double offset = i *
             (orientation == GraphOrientation.topToBottom
@@ -360,106 +345,80 @@ class GenogramController<E> extends BaseGraphController<E> {
                 : boxSize.height + spacing);
 
         if (orientation == GraphOrientation.topToBottom) {
-          final double nodeX = x + offset;
-          coupleGroup[i].position = Offset(nodeX, y);
+          coupleGroup[i].position = Offset(x + offset, y);
         } else {
-          final double nodeY = y + offset;
-          coupleGroup[i].position = Offset(x, nodeY);
+          coupleGroup[i].position = Offset(x, y + offset);
         }
       }
 
-      // Get all children for this couple group that haven't been positioned yet
+      // Lấy children chưa layout
       List<Node<E>> children = getChildrenForGroup(coupleGroup)
           .where((child) => !laidOut.contains(child))
           .toList();
 
-      // Sort children using the dedicated method
       sortChildrenBySiblingGroups(children, coupleGroup);
 
-      // If no children, this subtree is just the couple group with no descendants
       if (children.isEmpty) {
-        // Update the edge for this level
+        // Update edge đúng
         levelEdges[level] = orientation == GraphOrientation.topToBottom
-            ? x + groupSize
-            : y + groupSize;
+            ? max(levelEdges[level] ?? 0, x + groupSize)
+            : max(levelEdges[level] ?? 0, y + groupSize);
         return groupSize;
       }
 
-      // Distance for children from parent
+      // Khoảng cách cha → con
       final double childDistance = orientation == GraphOrientation.topToBottom
           ? boxSize.height + runSpacing
           : boxSize.width + runSpacing;
 
-      // Position coordinates for children based on orientation
       final double childrenX =
           orientation == GraphOrientation.topToBottom ? x : x + childDistance;
-
       final double childrenY =
           orientation == GraphOrientation.topToBottom ? y + childDistance : y;
 
-      double childrenTotalSize =
-          0; // Track total width/height required for all children
+      double childrenTotalSize = 0;
       double childPos =
           orientation == GraphOrientation.topToBottom ? childrenX : childrenY;
 
-      // Position each child and their descendants recursively
-      for (final child in children) {
-        // For each child, calculate the size of their entire subtree
+      for (int i = 0; i < children.length; i++) {
+        final child = children[i];
         final double subtreeSize = orientation == GraphOrientation.topToBottom
             ? layoutFamily(child, childPos, childrenY, level + 1)
             : layoutFamily(child, childrenX, childPos, level + 1);
 
-        // Add this subtree's size to the running total
         childrenTotalSize += subtreeSize;
-
-        // Move the next child's position, adding extra spacing
-        childPos += subtreeSize + spacing * 1.5;
-      }
-
-      // Calculate true children size by removing the extra spacing after the last child
-      final double trueChildrenSize = children.isNotEmpty
-          ? childrenTotalSize -
-              spacing * 0.5 // Remove extra spacing from last child
-          : 0;
-
-      // Center the parent couple group above/before their children to make the tree visually balanced
-      double parentCenter, childrenCenter, shift;
-
-      if (orientation == GraphOrientation.topToBottom) {
-        parentCenter = x + groupSize / 2;
-        childrenCenter = x + trueChildrenSize / 2;
-      } else {
-        parentCenter = y + groupSize / 2;
-        childrenCenter = y + trueChildrenSize / 2;
-      }
-
-      shift = childrenCenter - parentCenter;
-
-      // Only apply shifts when there are actually children and their size is greater than parents
-      if (children.isNotEmpty && trueChildrenSize > groupSize) {
-        // Apply the shift to each parent in the couple group
-        for (final parent in coupleGroup) {
-          if (orientation == GraphOrientation.topToBottom) {
-            parent.position =
-                Offset(parent.position.dx + shift, parent.position.dy);
-          } else {
-            parent.position =
-                Offset(parent.position.dx, parent.position.dy + shift);
-          }
+        if (i < children.length - 1) {
+          childPos += subtreeSize + spacing; // spacing chuẩn
         }
       }
 
-      // The total size of this subtree is the maximum of:
-      // - couple group size (parents)
-      // - total size of all children subtrees
-      final totalSize = max(groupSize, trueChildrenSize);
+      // Center group với children
+      double parentCenter, childrenCenter, shift;
+      if (orientation == GraphOrientation.topToBottom) {
+        parentCenter = x + groupSize / 2;
+        childrenCenter = x + childrenTotalSize / 2;
+        shift = childrenCenter - parentCenter;
+        for (final parent in coupleGroup) {
+          parent.position =
+              Offset(parent.position.dx + shift, parent.position.dy);
+        }
+      } else {
+        parentCenter = y + groupSize / 2;
+        childrenCenter = y + childrenTotalSize / 2;
+        shift = childrenCenter - parentCenter;
+        for (final parent in coupleGroup) {
+          parent.position =
+              Offset(parent.position.dx, parent.position.dy + shift);
+        }
+      }
 
-      // Update the edge for this level
+      final totalSize = max(groupSize, childrenTotalSize);
+
+      // Update cạnh level
       levelEdges[level] = orientation == GraphOrientation.topToBottom
-          ? x + totalSize
-          : y + totalSize;
+          ? max(levelEdges[level] ?? 0, x + totalSize)
+          : max(levelEdges[level] ?? 0, y + totalSize);
 
-      // Return the total size needed for this entire family subtree
       return totalSize;
     }
 
@@ -522,14 +481,17 @@ class GenogramController<E> extends BaseGraphController<E> {
             .map((node) => idProvider(node.data))
             .toList();
 
-        // Check if each child belongs to the husband
-        final bool aIsHusbandChild = fatherProvider(a.data) == husbandId;
-        final bool bIsHusbandChild = fatherProvider(b.data) == husbandId;
+        // Kiểm tra child có nằm trong danh sách con của husband không
+        final List<String>? aFatherIds = fatherProvider(a.data);
+        final List<String>? bFatherIds = fatherProvider(b.data);
+
+        final bool aIsHusbandChild = (aFatherIds ?? []).contains(husbandId);
+        final bool bIsHusbandChild = (bFatherIds ?? []).contains(husbandId);
 
         if (aIsHusbandChild && bIsHusbandChild) {
           // Both are husband's children, now check mother
-          final String? aMotherId = motherProvider(a.data);
-          final String? bMotherId = motherProvider(b.data);
+          final List<String>? aMotherId = motherProvider(a.data);
+          final List<String>? bMotherId = motherProvider(b.data);
 
           // If either has no mother, those come first
           if (aMotherId == null && bMotherId != null) return -1;
@@ -537,8 +499,15 @@ class GenogramController<E> extends BaseGraphController<E> {
           if (aMotherId == null && bMotherId == null) return 0;
 
           // Both have mothers, sort by the mother's position in spouse list
-          final int aMotherIndex = spouseIds.indexOf(aMotherId!);
-          final int bMotherIndex = spouseIds.indexOf(bMotherId!);
+          int aMotherIndex = (aMotherId ?? [])
+              .map((id) => spouseIds.indexOf(id))
+              .where((i) => i != -1)
+              .fold(spouseIds.length, (prev, i) => i < prev ? i : prev);
+
+          int bMotherIndex = (bMotherId ?? [])
+              .map((id) => spouseIds.indexOf(id))
+              .where((i) => i != -1)
+              .fold(spouseIds.length, (prev, i) => i < prev ? i : prev);
 
           // If mother is in spouse list, sort by their order
           if (aMotherIndex != -1 && bMotherIndex != -1) {
@@ -562,8 +531,10 @@ class GenogramController<E> extends BaseGraphController<E> {
       final bMother = motherProvider(b.data);
 
       // Compare parent combinations
-      final aCombo = '${aFather ?? ""}:${aMother ?? ""}';
-      final bCombo = '${bFather ?? ""}:${bMother ?? ""}';
+      final aCombo =
+          '${(aFather ?? []).join(",")}:${(aMother ?? []).join(",")}';
+      final bCombo =
+          '${(bFather ?? []).join(",")}:${(bMother ?? []).join(",")}';
       return aCombo.compareTo(bCombo);
     });
   }
