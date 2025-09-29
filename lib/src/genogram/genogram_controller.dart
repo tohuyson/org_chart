@@ -390,7 +390,7 @@ class GenogramController<E> extends BaseGraphController<E> {
 
         childrenTotalSize += subtreeSize;
         if (i < children.length - 1) {
-          childPos += subtreeSize + spacing * 2; // spacing chuẩn
+          childPos += subtreeSize + spacing; // spacing chuẩn
         }
       }
 

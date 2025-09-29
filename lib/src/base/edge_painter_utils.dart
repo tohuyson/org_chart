@@ -35,7 +35,7 @@ enum ConnectionType {
 
 /// Line ending types for edge connections
 enum LineEndingType {
-  arrow,
+  // arrow,
   circle,
   none,
 }
@@ -98,7 +98,7 @@ class EdgePainterUtils {
     required this.linePaint,
     required this.cornerRadius,
     required this.arrowStyle,
-    this.lineEndingType = LineEndingType.arrow,
+    this.lineEndingType = LineEndingType.none,
     this.arrowHeadLength = defaultArrowHeadLength,
     this.arrowHeadAngle = defaultArrowHeadAngle,
   });
@@ -131,12 +131,12 @@ class EdgePainterUtils {
 
     // Draw line ending based on type
     if (points.length >= 2 && lineEndingType != LineEndingType.none) {
-      final double angle = vectorAngle(points.last - points[points.length - 2]);
+      // final double angle = vectorAngle(points.last - points[points.length - 2]);
 
       switch (lineEndingType) {
-        case LineEndingType.arrow:
-          drawArrowHead(canvas, points.last, angle, connectionPaint);
-          break;
+        // case LineEndingType.arrow:
+        //   drawArrowHead(canvas, points.last, angle, connectionPaint);
+        //   break;
         case LineEndingType.circle:
           drawCircleEnd(canvas, points.last, connectionPaint);
           break;
@@ -469,7 +469,7 @@ class EdgePainterUtils {
           boxSize: boxSize,
           orientation: orientation,
         );
-        
+
       case ConnectionType.genogramParentChild:
         return _generateGenogramParentChildPoints(
           start: start,
@@ -532,8 +532,8 @@ class EdgePainterUtils {
   }) {
     if (orientation == GraphOrientation.topToBottom) {
       // Add half boxSize height to the first segment for extra vertical drop
-      final double firstDropY = start.dy + (boxSize.height / 2);
-      final double midY = (firstDropY + end.dy) / 2;
+      final double firstDropY = start.dy; // + (boxSize.height / 2);
+      final double midY = (firstDropY + 16); // (firstDropY + end.dy) / 2;
       return [
         start,
         Offset(start.dx, midY),

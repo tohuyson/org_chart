@@ -1,3 +1,5 @@
+import 'dart:math';
+
 import 'package:flutter/material.dart';
 import 'package:org_chart/src/base/edge_painter_utils.dart';
 import 'package:org_chart/src/genogram/genogram_enums.dart';
@@ -42,7 +44,7 @@ class GenogramEdgePainter<E> extends CustomPainter {
     required Paint linePaint,
     double cornerRadius = 15,
     required GraphArrowStyle arrowStyle,
-    LineEndingType lineEndingType = LineEndingType.arrow,
+    LineEndingType lineEndingType = LineEndingType.none,
     this.config = const GenogramEdgeConfig(),
     this.marriageStatusProvider,
   }) : utils = EdgePainterUtils(
@@ -126,7 +128,7 @@ class GenogramEdgePainter<E> extends CustomPainter {
       final Offset wifeConn = _getConnectionPoint(wife, ConnectionPoint.left);
 
       // Apply offset for multiple marriages
-      final double offset = -5.0 * spouseIndex;
+      final double offset = 0; //-5.0 * spouseIndex;
       final Offset husbandOffset, wifeOffset;
 
       if (controller.orientation == GraphOrientation.topToBottom) {
@@ -143,6 +145,7 @@ class GenogramEdgePainter<E> extends CustomPainter {
 
       // Get the appropriate marriage style for this status
       final marriageStyle = config.getMarriageStyle(status);
+      final double strokeWidth = marriageStyle.lineStyle.strokeWidth;
 
       // Create custom paint for this marriage
       final Paint marriagePaint = Paint()
@@ -151,18 +154,46 @@ class GenogramEdgePainter<E> extends CustomPainter {
         ..style = marriageStyle.lineStyle.paintStyle;
 
       // Draw the marriage line
-      canvas.drawLine(husbandOffset, wifeOffset,
-          marriagePaint); // Calculate connection point based on spouse index
+      // canvas.drawLine(husbandOffset, wifeOffset, marriagePaint);
+
+      final husbandOffsetNew = husbandOffset.translate(0, 24);
+      final wifeOffsetNew = wifeOffset.translate(0, 24);
+      canvas.drawLine(husbandOffset, husbandOffsetNew, marriagePaint);
+      canvas.drawLine(wifeOffset, wifeOffsetNew, marriagePaint);
+
+      canvas.drawLine(husbandOffsetNew.translate(-strokeWidth / 2, 0),
+          wifeOffsetNew.translate(strokeWidth / 2, 0), marriagePaint);
+
+      final double r = 16;
+      final center = Offset(
+          husbandOffsetNew.dx + (wifeOffsetNew.dx - husbandOffsetNew.dx) / 2,
+          husbandOffsetNew.dy);
+      final path = Path()
+        ..moveTo(center.dx + r * cos(0), center.dy + r * sin(0)) // phải
+        ..lineTo(
+            center.dx + r * cos(pi / 2), center.dy + r * sin(pi / 2)) // dưới
+        ..lineTo(center.dx + r * cos(pi), center.dy + r * sin(pi)) // trái
+        ..lineTo(center.dx + r * cos(3 * pi / 2),
+            center.dy + r * sin(3 * pi / 2)) // trên
+        ..close();
+
+      final paint = Paint()
+        ..color = Colors.orange
+        ..style = PaintingStyle.fill;
+      canvas.drawPath(path, paint);
+
+      // Calculate connection point based on spouse index
       // For first spouse (index 0): use midpoint (ratio 0.5)
       // For additional spouses: move closer to wife (ratio > 0.5)
       double connectionRatio = spouseIndex == 0 ? 0.5 : 0.9;
 
       // Store the weighted point for child connections
       _marriagePoints[marriageKey] = Offset(
-          husbandOffset.dx +
-              (wifeOffset.dx - husbandOffset.dx) * connectionRatio,
-          husbandOffset.dy +
-              (wifeOffset.dy - husbandOffset.dy) * connectionRatio);
+          husbandOffsetNew.dx +
+              (wifeOffsetNew.dx - husbandOffsetNew.dx) * connectionRatio,
+          husbandOffsetNew.dy +
+              r * 0.95 +
+              (wifeOffsetNew.dy - husbandOffsetNew.dy) * connectionRatio);
     }
   }
 
@@ -214,8 +245,6 @@ class GenogramEdgePainter<E> extends CustomPainter {
           child, ConnectionPoint.top); // Special case for married female
       final bool isMarriedFemale = controller.isFemale(child.data) &&
           controller.getSpouseList(child.data).isNotEmpty;
-
-      print(childConn);
 
       // track những parent đã được nối qua marriage
       final Set<String> usedParents = {};
@@ -302,12 +331,13 @@ class GenogramEdgePainter<E> extends CustomPainter {
         return node.position + Offset(controller.boxSize.width / 2, 0);
       case ConnectionPoint.right:
         return node.position +
-            Offset(controller.boxSize.width, controller.boxSize.height / 2);
+            Offset(controller.boxSize.width / 2, controller.boxSize.height);
       case ConnectionPoint.bottom:
         return node.position +
             Offset(controller.boxSize.width / 2, controller.boxSize.height);
       case ConnectionPoint.left:
-        return node.position + Offset(0, controller.boxSize.height / 2);
+        return node.position +
+            Offset(controller.boxSize.width / 2, controller.boxSize.height);
       case ConnectionPoint.center:
         return node.position +
             Offset(controller.boxSize.width / 2, controller.boxSize.height / 2);

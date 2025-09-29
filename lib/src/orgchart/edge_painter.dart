@@ -17,7 +17,7 @@ class OrgChartEdgePainter<E> extends CustomPainter {
     required Paint linePaint,
     double cornerRadius = 15,
     required GraphArrowStyle arrowStyle,
-    LineEndingType lineEndingType = LineEndingType.arrow,
+    LineEndingType lineEndingType = LineEndingType.none,
   }) : utils = EdgePainterUtils(
           linePaint: linePaint,
           cornerRadius: cornerRadius,

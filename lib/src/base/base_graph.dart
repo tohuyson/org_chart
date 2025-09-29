@@ -50,7 +50,7 @@ abstract class BaseGraph<E> extends StatefulWidget {
     this.onOptionSelect,
     this.arrowStyle = const SolidGraphArrow(),
     this.cornerRadius = 10.0,
-    this.lineEndingType = LineEndingType.arrow,
+    this.lineEndingType = LineEndingType.none,
     this.viewerController,
     this.interactionConfig,
     this.keyboardConfig,
