@@ -321,10 +321,10 @@ class GenogramEdgePainter<E> extends CustomPainter {
         _getConnectionPoint(parent, ConnectionPoint.bottom);
     final Offset childConn = _getConnectionPoint(child, ConnectionPoint.top);
 
-    final connectionType =
-        isMarriedFemale ? ConnectionType.twoSegment : ConnectionType.direct;
+    // final connectionType =
+    //     isMarriedFemale ? ConnectionType.twoSegment : ConnectionType.direct;
 
-    // final connectionType = ConnectionType.twoSegment;
+    final connectionType = ConnectionType.threeSegment;
 
     utils.drawConnection(canvas, parentConn, childConn, controller.boxSize,
         controller.orientation,
