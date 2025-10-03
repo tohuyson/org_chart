@@ -201,8 +201,9 @@ class GenogramEdgePainter<E> extends CustomPainter {
   void _drawParentChildConnections(Canvas canvas, List<Node<E>> nodes) {
     String makeMarriageKey(String id1, String id2) {
       // luôn sắp xếp để key đồng nhất
-      final sorted = [id1, id2]..sort();
-      return '${sorted[0]}|${sorted[1]}';
+      // final sorted = [id1, id2]..sort();
+      // return '${sorted[0]}|${sorted[1]}';
+      return '$id1|$id2';
     }
 
     for (final Node<E> child in nodes) {
@@ -243,8 +244,8 @@ class GenogramEdgePainter<E> extends CustomPainter {
       // Get connection point on child
       final Offset childConn = _getConnectionPoint(
           child, ConnectionPoint.top); // Special case for married female
-      final bool isMarriedFemale = controller.isFemale(child.data) &&
-          controller.getSpouseList(child.data).isNotEmpty;
+      // final bool isMarriedFemale = controller.isFemale(child.data) &&
+      //     controller.getSpouseList(child.data).isNotEmpty;
 
       // track những parent đã được nối qua marriage
       final Set<String> usedParents = {};
@@ -270,9 +271,11 @@ class GenogramEdgePainter<E> extends CustomPainter {
                 ..strokeWidth = config.childStrokeWidth
                 ..style = PaintingStyle.stroke;
 
-              final connectionType = isMarriedFemale
-                  ? ConnectionType.twoSegment
-                  : ConnectionType.genogramParentChild;
+              // final connectionType = isMarriedFemale
+              //     ? ConnectionType.twoSegment
+              //     : ConnectionType.genogramParentChild;
+
+              final connectionType = ConnectionType.genogramParentChild;
 
               utils.drawConnection(
                 canvas,
@@ -291,14 +294,16 @@ class GenogramEdgePainter<E> extends CustomPainter {
       // Nối những cha không nằm trong marriage nào
       for (final father in fathers) {
         if (!usedParents.contains(controller.idProvider(father.data))) {
-          _drawSingleParentConnection(canvas, father, child, isMarriedFemale);
+          // _drawSingleParentConnection(canvas, father, child, isMarriedFemale);
+          _drawSingleParentConnection(canvas, father, child, false);
         }
       }
 
       // Nối những mẹ không nằm trong marriage nào
       for (final mother in mothers) {
         if (!usedParents.contains(controller.idProvider(mother.data))) {
-          _drawSingleParentConnection(canvas, mother, child, isMarriedFemale);
+          // _drawSingleParentConnection(canvas, mother, child, isMarriedFemale);
+          _drawSingleParentConnection(canvas, mother, child, false);
         }
       }
     }
@@ -318,6 +323,8 @@ class GenogramEdgePainter<E> extends CustomPainter {
 
     final connectionType =
         isMarriedFemale ? ConnectionType.twoSegment : ConnectionType.direct;
+
+    // final connectionType = ConnectionType.twoSegment;
 
     utils.drawConnection(canvas, parentConn, childConn, controller.boxSize,
         controller.orientation,

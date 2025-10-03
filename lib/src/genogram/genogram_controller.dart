@@ -307,27 +307,27 @@ class GenogramController<E> extends BaseGraphController<E> {
 
       // Xây group (husband + wives hoặc female đơn lẻ)
       final List<Node<E>> coupleGroup = <Node<E>>[];
-      if (isMale(node.data)) {
-        coupleGroup.add(node);
-        laidOut.add(node);
+      // if (isMale(node.data)) {
+      coupleGroup.add(node);
+      laidOut.add(node);
 
-        final spouses = getSpouseList(node.data);
-        for (final spouse in spouses) {
-          laidOut.remove(spouse); // reset nếu đã layout
-        }
-        coupleGroup.addAll(spouses);
-        laidOut.addAll(spouses);
-      } else {
-        final bool willBeSpouseOfLaterMale = nodes
-            .where((n) => !laidOut.contains(n) && isMale(n.data))
-            .any((n) => (spousesProvider(n.data) ?? [])
-                .contains(idProvider(node.data)));
-
-        if (!willBeSpouseOfLaterMale) {
-          coupleGroup.add(node);
-          laidOut.add(node);
-        }
+      final spouses = getSpouseList(node.data);
+      for (final spouse in spouses) {
+        laidOut.remove(spouse); // reset nếu đã layout
       }
+      coupleGroup.addAll(spouses);
+      laidOut.addAll(spouses);
+      // } else {
+      //   final bool willBeSpouseOfLaterMale = nodes
+      //       .where((n) => !laidOut.contains(n) && isMale(n.data))
+      //       .any((n) => (spousesProvider(n.data) ?? [])
+      //           .contains(idProvider(node.data)));
+
+      //   if (!willBeSpouseOfLaterMale) {
+      //     coupleGroup.add(node);
+      //     laidOut.add(node);
+      //   }
+      // }
 
       if (coupleGroup.isEmpty) return 0;
 
@@ -384,8 +384,9 @@ class GenogramController<E> extends BaseGraphController<E> {
 
       for (int i = 0; i < children.length; i++) {
         final child = children[i];
+        int? levelChild = levelProvider(child.data);
         final double subtreeSize = orientation == GraphOrientation.topToBottom
-            ? layoutFamily(child, childPos, childrenY, level + 1)
+            ? layoutFamily(child, childPos, childrenY, levelChild ?? level + 1)
             : layoutFamily(child, childrenX, childPos, level + 1);
 
         childrenTotalSize += subtreeSize;
@@ -395,24 +396,24 @@ class GenogramController<E> extends BaseGraphController<E> {
       }
 
       // Center group với children
-      double parentCenter, childrenCenter, shift;
-      if (orientation == GraphOrientation.topToBottom) {
-        parentCenter = x + groupSize / 2;
-        childrenCenter = x + childrenTotalSize / 2;
-        shift = childrenCenter - parentCenter;
-        for (final parent in coupleGroup) {
-          parent.position =
-              Offset(parent.position.dx + shift, parent.position.dy);
-        }
-      } else {
-        parentCenter = y + groupSize / 2;
-        childrenCenter = y + childrenTotalSize / 2;
-        shift = childrenCenter - parentCenter;
-        for (final parent in coupleGroup) {
-          parent.position =
-              Offset(parent.position.dx, parent.position.dy + shift);
-        }
-      }
+      // double parentCenter, childrenCenter, shift;
+      // if (orientation == GraphOrientation.topToBottom) {
+      //   parentCenter = x + groupSize / 2;
+      //   childrenCenter = x + childrenTotalSize / 2;
+      //   shift = childrenCenter - parentCenter;
+      //   for (final parent in coupleGroup) {
+      //     parent.position =
+      //         Offset(parent.position.dx + shift, parent.position.dy);
+      //   }
+      // } else {
+      //   parentCenter = y + groupSize / 2;
+      //   childrenCenter = y + childrenTotalSize / 2;
+      //   shift = childrenCenter - parentCenter;
+      //   for (final parent in coupleGroup) {
+      //     parent.position =
+      //         Offset(parent.position.dx, parent.position.dy + shift);
+      //   }
+      // }
 
       final totalSize = max(groupSize, childrenTotalSize);
 
