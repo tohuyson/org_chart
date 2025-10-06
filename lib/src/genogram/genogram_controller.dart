@@ -358,7 +358,7 @@ class GenogramController<E> extends BaseGraphController<E> {
           .where((child) => !laidOut.contains(child))
           .toList();
 
-      sortChildrenBySiblingGroups(children, coupleGroup);
+      // sortChildrenBySiblingGroups(children, coupleGroup);
 
       if (children.isEmpty) {
         // Update edge đúng
